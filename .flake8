@@ -1,0 +1,9 @@
+[flake8]
+max-line-length = 90
+
+# McCabe complexity
+max-complexity = 10
+
+extended-ignore=B901,E203,E226,E302,E722,S101,S311,I004,N818,T002,T003
+
+exclude = .git,__pycache__,docs/sphinx/source/conf.py

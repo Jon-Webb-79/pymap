@@ -1,0 +1,16 @@
+The following instructions are to be used for installing the continuous integration environment.
+
+1. Verify trageted versions of python in pyproject.toml files
+2. Verify package versions in .pre-commit-config.yamls
+3. Instantiate a git repository
+	- git init -b main
+4. Install pre-commiot hooks
+	- pre-commit install
+5. Test via tox
+	- tox
+6. If step 3 passed, add all files and directories
+	- git add .
+	- git commit -m "Initial commit"
+7. Create github account and upload (follow github instructions)
+8. Upload to github
+	- git push -u origin main
