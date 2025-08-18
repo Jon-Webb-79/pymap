@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Folium Map</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Energy Infrastructure Map</h1>
+        <div class="map-container" id="map-container">
+            {{ map_html|safe }}
+        </div>
+    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Folium Map Application Loaded');
+            console.log('Available basemaps:', {{ available_basemaps|tojson }});
+            console.log('Use the layer control in the top-right corner of the map to switch basemaps');
+        });
+    </script>
+</body>
+</html>
