@@ -14,18 +14,6 @@ from flask import Flask, jsonify, render_template, request
 # ==========================================================================================
 
 
-class Config:
-    """Application configuration"""
-
-    DEBUG = True
-    HOST = "localhost"
-    PORT = 5000
-    SECRET_KEY = "your-secret-key-here"
-
-
-# ==========================================================================================
-# ==========================================================================================
-
 # Basemap configuration
 BASEMAP_OPTIONS = {
     "Esri Satellite": (
@@ -229,10 +217,10 @@ def create_routes(app: Flask) -> None:
 class TemplateManager:
     """Manager for HTML templates and static assets"""
 
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, template: str, static: str):
         self.data_dir = data_dir
-        self.template_dir = data_dir / "templates"
-        self.static_dir = data_dir / "assets"
+        self.template_dir = data_dir / template
+        self.static_dir = data_dir / static
 
     # ------------------------------------------------------------------------------------------
 

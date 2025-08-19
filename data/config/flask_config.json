@@ -1,0 +1,34 @@
+{
+  "flask_init": {
+    "import_name": "__name__",
+    "template_folder": "templates",
+    "static_folder": "assets",
+    "static_url_path": null,
+    "static_host": null,
+    "host_matching": false,
+    "subdomain_matching": false,
+    "instance_path": null,
+    "instance_relative_config": false,
+    "root_path": null
+  },
+  "flask_run": {
+    "host": "127.0.0.1",
+    "port": 5000,
+    "debug": false,
+    "load_dotenv": true,
+    "use_reloader": null,
+    "use_debugger": null,
+    "use_evalex": true,
+    "extra_files": [],
+    "exclude_patterns": [],
+    "reloader_type": "auto",
+    "threaded": false,
+    "processes": 1,
+    "request_handler": null,
+    "static_files": null,
+    "passthrough_errors": false,
+    "ssl_context": null,
+    "certfile": null,
+    "keyfile": null
+  }
+}
