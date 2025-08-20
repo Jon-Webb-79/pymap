@@ -1,7 +1,8 @@
 from pathlib import Path
+from typing import Optional, Union
 
 import folium
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 # ==========================================================================================
 # ==========================================================================================
@@ -75,31 +76,68 @@ SAMPLE_MARKERS = [
 
 
 class MapService:
-    """Service class for creating and managing Folium maps"""
+    """Service class for creating and managing Folium maps with predefined basemaps."""
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """
+        Initialize the map service with predefined configuration.
+
+        Attributes:
+            basemap_options (Dict[str, str]): Mapping of basemap names to tile URLs.
+            attributions (Dict[str, str]): Mapping of basemap names to attribution text.
+            default_config (Dict[str, Any]): Default map configuration including
+                'basemap', 'lat', 'lon', and 'zoom'.
+        """
         self.basemap_options = BASEMAP_OPTIONS
         self.attributions = BASEMAP_ATTRIBUTIONS
         self.default_config = DEFAULT_MAP_CONFIG
 
     # ------------------------------------------------------------------------------------------
 
-    def validate_basemap(self, basemap):
-        """Validate basemap selection"""
+    def validate_basemap(self, basemap: Optional[str]) -> str:
+        """
+        Validate that a basemap name exists in the available options.
+
+        Args:
+            basemap: Name of the basemap to validate.
+
+        Returns:
+            The validated basemap name if it exists, otherwise the default basemap.
+        """
         if basemap not in self.basemap_options:
             return self.default_config["basemap"]
         return basemap
 
     # ------------------------------------------------------------------------------------------
 
-    def create_base_map(self, lat, lon, zoom):
-        """Create a base Folium map without tiles"""
+    def create_base_map(self, lat: float, lon: float, zoom: int) -> folium.Map:
+        """
+        Create a new Folium base map.
+
+        Args:
+            lat: Latitude for the initial map center.
+            lon: Longitude for the initial map center.
+            zoom: Initial zoom level.
+
+        Returns:
+            A Folium Map object centered at the given coordinates.
+        """
         return folium.Map(location=[lat, lon], zoom_start=zoom, tiles=None)
 
     # ------------------------------------------------------------------------------------------
 
-    def add_basemap_layer(self, map_obj, basemap_name, is_default=False):
-        """Add a single basemap layer to the map"""
+    def add_basemap_layer(self, map_obj: folium.Map, basemap_name: str, is_default: bool = False) -> None:
+        """
+        Add a basemap layer to an existing Folium map.
+
+        Args:
+            map_obj: The Folium Map to add the basemap to.
+            basemap_name: The name of the basemap to add.
+            is_default: Whether this basemap should be the default visible layer.
+
+        Raises:
+            ValueError: If the basemap name is not valid.
+        """
         if basemap_name not in self.basemap_options:
             raise ValueError(f"Invalid basemap: {basemap_name}")
 
@@ -113,8 +151,14 @@ class MapService:
 
     # ------------------------------------------------------------------------------------------
 
-    def add_all_basemap_layers(self, map_obj, selected_basemap):
-        """Add all basemap layers to the map"""
+    def add_all_basemap_layers(self, map_obj: folium.Map, selected_basemap: str) -> None:
+        """
+        Add all basemap layers to the map, ensuring the selected one is default.
+
+        Args:
+            map_obj: The Folium Map to add basemap layers to.
+            selected_basemap: The basemap to set as default.
+        """
         # Add selected basemap first (will be default)
         self.add_basemap_layer(map_obj, selected_basemap, is_default=True)
 
@@ -125,8 +169,13 @@ class MapService:
 
     # ------------------------------------------------------------------------------------------
 
-    def add_sample_markers(self, map_obj):
-        """Add sample markers to the map"""
+    def add_sample_markers(self, map_obj: folium.Map) -> None:
+        """
+        Add sample markers to the map.
+
+        Args:
+            map_obj: The Folium Map to which markers should be added.
+        """
         for marker_data in SAMPLE_MARKERS:
             folium.Marker(
                 [marker_data["lat"], marker_data["lon"]],
@@ -136,8 +185,27 @@ class MapService:
 
     # ------------------------------------------------------------------------------------------
 
-    def create_map(self, basemap=None, lat=None, lon=None, zoom=None, include_markers=True):
-        """Create a complete Folium map with specified parameters"""
+    def create_map(
+        self,
+        basemap: Optional[str] = None,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
+        zoom: Optional[int] = None,
+        include_markers: Optional[bool] = True,
+    ) -> folium.Map:
+        """
+        Construct a complete Folium map with basemaps, controls, and markers.
+
+        Args:
+            basemap: The basemap to use. Defaults to the configured default basemap.
+            lat: Latitude for the map center. Defaults to the configured default.
+            lon: Longitude for the map center. Defaults to the configured default.
+            zoom: Initial zoom level. Defaults to the configured default.
+            include_markers: Whether to add sample markers.
+
+        Returns:
+            A fully constructed Folium Map with basemaps, controls, and optional markers.
+        """
         # Use defaults if parameters not provided
         basemap = basemap or self.default_config["basemap"]
         lat = lat or self.default_config["lat"]
@@ -164,8 +232,13 @@ class MapService:
 
     # ------------------------------------------------------------------------------------------
 
-    def get_available_basemaps(self):
-        """Get list of available basemap names"""
+    def get_available_basemaps(self) -> list[str]:
+        """
+        Get a list of available basemap names.
+
+        Returns:
+            A list of basemap option names.
+        """
         return list(self.basemap_options.keys())
 
 
@@ -174,13 +247,40 @@ class MapService:
 
 
 def create_routes(app: Flask) -> None:
-    """Create and register all routes with the Flask app"""
+    """
+    Register application routes on the provided Flask app.
 
+    This function attaches two routes:
+
+      - ``"/"``: The index page. Renders an interactive Folium map into an HTML
+        template. Accepts an optional ``basemap`` query parameter to choose the
+        initial basemap.
+
+      - ``"/api/basemaps"``: A JSON API endpoint that returns the list of
+        available basemaps and the default basemap.
+
+    Args:
+        app: The Flask application instance to which routes will be registered.
+
+    Returns:
+        None. Routes are registered on the given app in place.
+    """
     map_service = MapService()
 
     @app.route("/")
-    def index():
-        """Main route that displays the map"""
+    def index() -> Union[str, Response]:
+        """
+        Render the index page with an embedded Folium map.
+
+        Query Parameters:
+            basemap (str, optional): The name of the basemap to use. If not
+                provided or invalid, the service's default basemap is used.
+
+        Returns:
+            Rendered HTML page (str or Response) with:
+              - ``map_html``: HTML representation of the Folium map
+              - ``available_basemaps``: List of basemaps for UI controls
+        """
         # Get basemap from query parameter (optional, for URL-based control)
         selected_basemap = request.args.get("basemap", map_service.default_config["basemap"])
 
@@ -200,8 +300,15 @@ def create_routes(app: Flask) -> None:
         )
 
     @app.route("/api/basemaps")
-    def get_basemaps():
-        """API endpoint to get available basemaps"""
+    def get_basemaps() -> Response:
+        """
+        JSON API endpoint returning available basemaps.
+
+        Returns:
+            JSON response with keys:
+              - ``basemaps`` (List[str]): All supported basemap names
+              - ``default`` (str): The configured default basemap
+        """
         return jsonify(
             {
                 "basemaps": map_service.get_available_basemaps(),
@@ -215,9 +322,23 @@ def create_routes(app: Flask) -> None:
 
 
 class TemplateManager:
-    """Manager for HTML templates and static assets"""
+    """
+    Utility class for managing Jinja2 HTML templates and static files
+    (CSS/JS) required by the Flask + Folium application.
 
-    def __init__(self, data_dir: Path, template_dir: Path, static_dir: Path):
+    The class ensures template and static directories exist, provides
+    default HTML/CSS content, and writes them to disk when needed.
+    """
+
+    def __init__(self, data_dir: Path, template_dir: Path, static_dir: Path) -> None:
+        """
+        Initialize the TemplateManager with paths to project directories.
+
+        Args:
+            data_dir: Base data directory for the application.
+            template_dir: Directory where Jinja2 templates (e.g. ``index.html``) are stored.
+            static_dir: Directory where static files (e.g. CSS, JS) are stored.
+        """
         self.data_dir = data_dir
         self.template_dir = template_dir
         self.static_dir = static_dir
@@ -225,7 +346,16 @@ class TemplateManager:
     # ------------------------------------------------------------------------------------------
 
     def create_templates(self) -> str:
-        """Create all template files and static assets"""
+        """
+        Create required template and static files for the web application.
+
+        - Ensures that the template and static directories exist.
+        - Creates an ``index.html`` template file if not already present.
+        - Ensures a default ``style.css`` exists in the static directory.
+
+        Returns:
+            None. Files are written to disk in the specified directories.
+        """
         self._ensure_template_dir()
         self._ensure_static_dirs()
 
@@ -250,13 +380,28 @@ class TemplateManager:
     # PRIVATE-LIKE CONTENT
 
     def _ensure_template_dir(self) -> None:
-        """Create templates directory if it doesn't exist."""
+        """
+        Ensure the template directory exists.
+
+        Creates the directory (and parents) if it does not exist.
+
+        Returns:
+            None
+        """
         self.template_dir.mkdir(parents=True, exist_ok=True)
 
     # ------------------------------------------------------------------------------------------
 
     def _ensure_static_dirs(self) -> None:
-        """Create static directories if they don't exist."""
+        """
+        Ensure static directories exist.
+
+        Creates the ``static/``, ``static/css/``, and ``static/js/`` directories
+        if they do not already exist.
+
+        Returns:
+            None
+        """
         for dir_path in (
             self.static_dir,
             self.static_dir / "css",
@@ -267,7 +412,15 @@ class TemplateManager:
     # ------------------------------------------------------------------------------------------
 
     def _get_index_template(self) -> str:
-        """Get the main index.html template content"""
+        """
+        Return the default Jinja2 index.html template content.
+
+        This template defines the HTML structure for embedding a Folium map
+        into a Flask-rendered page.
+
+        Returns:
+            str: The HTML template as a string.
+        """
         return """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -296,7 +449,15 @@ class TemplateManager:
     # ------------------------------------------------------------------------------------------
 
     def _get_default_css_content(self):
-        """Get default CSS content only if style.css doesn't exist"""
+        """
+        Return default CSS content for styling the Folium map page.
+
+        Provides responsive layout, container styles, and
+        lightweight styling for basemap tags and instructions.
+
+        Returns:
+            str: CSS stylesheet content.
+        """
         return """/* Basic styles - customize as needed */
 body {
     font-family: Arial, sans-serif;
