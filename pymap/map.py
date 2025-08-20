@@ -217,10 +217,10 @@ def create_routes(app: Flask) -> None:
 class TemplateManager:
     """Manager for HTML templates and static assets"""
 
-    def __init__(self, data_dir: Path, template: str, static: str):
+    def __init__(self, data_dir: Path, template_dir: Path, static_dir: Path):
         self.data_dir = data_dir
-        self.template_dir = data_dir / template
-        self.static_dir = data_dir / static
+        self.template_dir = template_dir
+        self.static_dir = static_dir
 
     # ------------------------------------------------------------------------------------------
 

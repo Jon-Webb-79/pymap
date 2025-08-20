@@ -70,23 +70,6 @@ def _deep_update(base: dict[str, Any], override: dict[str, Any]) -> dict[str, An
 
 # ------------------------------------------------------------------------------------------
 
-# def _coerce_path(maybe_path: Optional[str], data_dir: Path) -> Optional[Path]:
-#     if maybe_path is None:
-#         return None
-#     p = Path(maybe_path)
-#     return p if p.is_absolute() else (data_dir / p)
-#
-# # ------------------------------------------------------------------------------------------
-#
-# def _resolve_import_name(value: Optional[str], module_dunder_name: str) -> str:
-#     # If JSON has "__name__", replace with the caller's __name__
-#     # This keeps your app import-safe and script-safe.
-#     if not value or value == "__name__":
-#         return module_dunder_name
-#     return value
-
-# ------------------------------------------------------------------------------------------
-
 
 def _load_json_config(config_path: Optional[Path]) -> dict[str, Any]:
     if not config_path:
@@ -114,20 +97,21 @@ def _split_run_args(run_cfg: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
 # ------------------------------------------------------------------------------------------
 
 
-def create_app(data_dir: Path, template_dir: str, static_dir: str) -> Flask:
+def create_app(data_dir: Path, flask_config_data: dict[str, Any]) -> Flask:
     """Application factory function"""
 
-    template_path = data_dir / template_dir
-    static_path = data_dir / static_dir
+    flask_config_data["template_folder"] = data_dir / flask_config_data["template_folder"]
+    flask_config_data["static_folder"] = data_dir / flask_config_data["static_folder"]
 
-    print(f"DEBUG: Flask template_folder: {template_path.resolve()}")  # Add this
-    print(f"DEBUG: Flask static_folder: {static_path.resolve()}")  # Add this
+    print(f"DEBUG: Flask template_folder: {flask_config_data['template_folder'].resolve()}")
+    print(f"DEBUG: Flask static_folder: {flask_config_data['static_folder'].resolve()}")
 
-    app = Flask(__name__, template_folder=template_path, static_folder=static_path)
-    # app.config.from_object(Config)
+    app = Flask(**flask_config_data)
 
     # Create templates
-    template_manager = TemplateManager(data_dir, template_dir, static_dir)
+    template_manager = TemplateManager(
+        data_dir, flask_config_data["template_folder"], flask_config_data["static_folder"]
+    )
     template_manager.create_templates()
 
     # Register routes
@@ -139,11 +123,12 @@ def create_app(data_dir: Path, template_dir: str, static_dir: str) -> Flask:
 # ------------------------------------------------------------------------------------------
 
 
-def main(data_dir: Path) -> None:
+def main(data_dir: Path, config_file: str, config_dir: str = "config") -> None:
     """Main function to run the application"""
-    app = create_app(data_dir, "templates", "assets")
+    json_data = _load_json_config(data_dir / config_dir / config_file)
 
-    json_data = _load_json_config(data_dir / "config" / "flask_config.json")
+    app = create_app(data_dir, json_data.get("flask_init", {}))
+
     run_cfg = json_data.get("flask_run", {})
     print("Starting Folium Web Application...")
     print(f'Open your browser and navigate to: http://{run_cfg["host"]}:{run_cfg["port"]}')
@@ -160,7 +145,7 @@ def main(data_dir: Path) -> None:
 if __name__ == "__main__":
     # Import here to avoid circular imports
     input_dir = Path("../data/")
-    main(input_dir)
+    main(input_dir, "flask_config.json")
 
 
 # ==========================================================================================
