@@ -14,50 +14,6 @@ from flask import Flask, Response, jsonify, render_template, request
 # ==========================================================================================
 # ==========================================================================================
 
-
-# Basemap configuration
-BASEMAP_OPTIONS = {
-    "Esri Satellite": (
-        "https://server.arcgisonline.com/ArcGIS/rest/services/" "World_Imagery/MapServer/tile/{z}/{y}/{x}"
-    ),
-    "OpenStreetMap": ("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-    "OpenTopoMap": ("https://tile.opentopomap.org/{z}/{x}/{y}.png"),
-}
-
-# ==========================================================================================
-# ==========================================================================================
-
-# Attribution for each basemap
-BASEMAP_ATTRIBUTIONS = {
-    "Esri Satellite": (
-        "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, "
-        "Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-    ),
-    "OpenStreetMap": (
-        "&copy; <a href='https://www.openstreetmap.org/copyright'>" "OpenStreetMap</a> contributors"
-    ),
-    "OpenTopoMap": (
-        "Map data: &copy; <a href='https://www.openstreetmap.org/copyright'>"
-        "OpenStreetMap</a> contributors, <a href='http://viewfinderpanorama.org'>"
-        "SRTM</a> | Map style: &copy; <a href='https://opentopomap.org'>OpenTopoMap</a> "
-        "(<a href='https://creativecommons.org/licenses/by-sa/3.0/'>CC-BY-SA</a>)"
-    ),
-}
-
-
-# ==========================================================================================
-# ==========================================================================================
-
-# Default map settings
-DEFAULT_MAP_CONFIG = {
-    "lat": 39.8283,
-    "lon": -98.5795,
-    "zoom": 4,
-    "basemap": "OpenStreetMap",
-}
-
-# ------------------------------------------------------------------------------------------
-
 # Sample markers data
 SAMPLE_MARKERS = [
     {
@@ -78,7 +34,9 @@ SAMPLE_MARKERS = [
 class MapService:
     """Service class for creating and managing Folium maps with predefined basemaps."""
 
-    def __init__(self) -> None:
+    def __init__(
+        self, basemap_options: dict[str, str], attributions: dict[str, str], default_config: dict[str, float]
+    ) -> None:
         """
         Initialize the map service with predefined configuration.
 
@@ -88,9 +46,9 @@ class MapService:
             default_config (Dict[str, Any]): Default map configuration including
                 'basemap', 'lat', 'lon', and 'zoom'.
         """
-        self.basemap_options = BASEMAP_OPTIONS
-        self.attributions = BASEMAP_ATTRIBUTIONS
-        self.default_config = DEFAULT_MAP_CONFIG
+        self.basemap_options = basemap_options
+        self.attributions = attributions
+        self.default_config = default_config
 
     # ------------------------------------------------------------------------------------------
 
@@ -246,7 +204,9 @@ class MapService:
 # ==========================================================================================
 
 
-def create_routes(app: Flask) -> None:
+def create_routes(
+    app: Flask, map_options: dict[str, str], attributes: dict[str, str], map_config: dict[str, float]
+) -> None:
     """
     Register application routes on the provided Flask app.
 
@@ -265,7 +225,7 @@ def create_routes(app: Flask) -> None:
     Returns:
         None. Routes are registered on the given app in place.
     """
-    map_service = MapService()
+    map_service = MapService(map_options, attributes, map_config)
 
     @app.route("/")
     def index() -> Union[str, Response]:

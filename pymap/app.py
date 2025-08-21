@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from flask import Flask
-from map import BASEMAP_OPTIONS, TemplateManager, create_routes
+from map import TemplateManager, create_routes
 
 # ==========================================================================================
 # ==========================================================================================
@@ -16,6 +16,43 @@ from map import BASEMAP_OPTIONS, TemplateManager, create_routes
 # ==========================================================================================
 # ==========================================================================================
 # Global Data
+
+# Basemap configuration
+BASEMAP_OPTIONS = {
+    "Esri Satellite": (
+        "https://server.arcgisonline.com/ArcGIS/rest/services/" "World_Imagery/MapServer/tile/{z}/{y}/{x}"
+    ),
+    "OpenStreetMap": ("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
+    "OpenTopoMap": ("https://tile.opentopomap.org/{z}/{x}/{y}.png"),
+}
+
+# ==========================================================================================
+# ==========================================================================================
+
+# Attribution for each basemap
+BASEMAP_ATTRIBUTIONS = {
+    "Esri Satellite": (
+        "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, "
+        "Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
+    ),
+    "OpenStreetMap": (
+        "&copy; <a href='https://www.openstreetmap.org/copyright'>" "OpenStreetMap</a> contributors"
+    ),
+    "OpenTopoMap": (
+        "Map data: &copy; <a href='https://www.openstreetmap.org/copyright'>"
+        "OpenStreetMap</a> contributors, <a href='http://viewfinderpanorama.org'>"
+        "SRTM</a> | Map style: &copy; <a href='https://opentopomap.org'>OpenTopoMap</a> "
+        "(<a href='https://creativecommons.org/licenses/by-sa/3.0/'>CC-BY-SA</a>)"
+    ),
+}
+
+# Default map settings
+DEFAULT_MAP_CONFIG = {
+    "lat": 39.8283,
+    "lon": -98.5795,
+    "zoom": 4,
+    "basemap": "OpenStreetMap",
+}
 
 
 DEFAULTS: dict[str, Any] = {
@@ -244,7 +281,12 @@ def create_app(data_dir: Path, flask_config_data: dict[str, Any]) -> Flask:
     template_manager.create_templates()
 
     # Register routes
-    create_routes(app)
+    create_routes(
+        app,
+        BASEMAP_OPTIONS,
+        BASEMAP_ATTRIBUTIONS,
+        DEFAULT_MAP_CONFIG,
+    )
 
     return app
 
