@@ -17,43 +17,6 @@ from map import TemplateManager, create_routes
 # ==========================================================================================
 # Global Data
 
-# Basemap configuration
-BASEMAP_OPTIONS = {
-    "Esri Satellite": (
-        "https://server.arcgisonline.com/ArcGIS/rest/services/" "World_Imagery/MapServer/tile/{z}/{y}/{x}"
-    ),
-    "OpenStreetMap": ("https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
-    "OpenTopoMap": ("https://tile.opentopomap.org/{z}/{x}/{y}.png"),
-}
-
-# ==========================================================================================
-# ==========================================================================================
-
-# Attribution for each basemap
-BASEMAP_ATTRIBUTIONS = {
-    "Esri Satellite": (
-        "Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, "
-        "Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community"
-    ),
-    "OpenStreetMap": (
-        "&copy; <a href='https://www.openstreetmap.org/copyright'>" "OpenStreetMap</a> contributors"
-    ),
-    "OpenTopoMap": (
-        "Map data: &copy; <a href='https://www.openstreetmap.org/copyright'>"
-        "OpenStreetMap</a> contributors, <a href='http://viewfinderpanorama.org'>"
-        "SRTM</a> | Map style: &copy; <a href='https://opentopomap.org'>OpenTopoMap</a> "
-        "(<a href='https://creativecommons.org/licenses/by-sa/3.0/'>CC-BY-SA</a>)"
-    ),
-}
-
-# Default map settings
-DEFAULT_MAP_CONFIG = {
-    "lat": 39.8283,
-    "lon": -98.5795,
-    "zoom": 4,
-    "basemap": "OpenStreetMap",
-}
-
 
 DEFAULTS: dict[str, Any] = {
     "flask_init": {
@@ -226,10 +189,70 @@ def _split_run_args(run_cfg: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
     return base, extra
 
 
+# ==========================================================================================
+# ==========================================================================================
+
+
+class MapConfigError(Exception):
+    """Custom exception for invalid map configuration."""
+
+    pass
+
+
 # ------------------------------------------------------------------------------------------
 
 
-def create_app(data_dir: Path, flask_config_data: dict[str, Any]) -> Flask:
+def _load_map_config(config_path: Path) -> dict:
+    """
+    Load and validate the map configuration JSON file.
+
+    Parameters
+    ----------
+    config_path : Path
+        Path to the JSON configuration file.
+
+    Returns
+    -------
+    dict
+        The validated configuration dictionary.
+
+    Raises
+    ------
+    MapConfigError
+        If validation fails.
+    """
+    # Load JSON
+    with open(config_path, encoding="utf-8") as f:
+        config = json.load(f)
+
+    basemap_options = config.get("basemap_options", {})
+    basemap_attributions = config.get("basemap_attributions", {})
+    default_config = config.get("default_map_config", {})
+
+    # --- Validation rules ---
+    # 1. Each basemap must have an attribution
+    missing_attributions = [b for b in basemap_options if b not in basemap_attributions]
+    if missing_attributions:
+        raise MapConfigError(f"Missing attributions for basemaps: {missing_attributions}")
+
+    # 2. Default basemap must exist in basemap_options
+    default_basemap = default_config.get("basemap")
+    if default_basemap not in basemap_options:
+        raise MapConfigError(f"Default basemap '{default_basemap}' not found in basemap_options")
+
+    return config
+
+
+# ------------------------------------------------------------------------------------------
+
+
+def create_app(
+    data_dir: Path,
+    flask_config_data: dict[str, Any],
+    basemap_options: dict[str, str],
+    attributes: dict[str, str],
+    map_config: dict[str, float],
+) -> Flask:
     """
     Application factory that builds and configures a Flask app instance.
 
@@ -283,9 +306,9 @@ def create_app(data_dir: Path, flask_config_data: dict[str, Any]) -> Flask:
     # Register routes
     create_routes(
         app,
-        BASEMAP_OPTIONS,
-        BASEMAP_ATTRIBUTIONS,
-        DEFAULT_MAP_CONFIG,
+        basemap_options,
+        attributes,
+        map_config,
     )
 
     return app
@@ -294,7 +317,7 @@ def create_app(data_dir: Path, flask_config_data: dict[str, Any]) -> Flask:
 # ------------------------------------------------------------------------------------------
 
 
-def main(data_dir: Path, config_file: str, config_dir: str = "config") -> None:
+def main(data_dir: Path, config_file: str, basemap_file: str, config_dir: str = "config") -> None:
     """
     Entry point for running the Flask application.
 
@@ -307,6 +330,7 @@ def main(data_dir: Path, config_file: str, config_dir: str = "config") -> None:
             ``config_dir``, ``templates``, and ``assets``).
         config_file: Name of the JSON configuration file to load (e.g.,
             ``"flask_config.json"``).
+        basemap_file: Name of the JSON file containing basemap information to be loaded
         config_dir: Subdirectory of ``data_dir`` where config files are stored.
             Defaults to ``"config"``.
 
@@ -329,14 +353,20 @@ def main(data_dir: Path, config_file: str, config_dir: str = "config") -> None:
         >>> if __name__ == "__main__":
         ...     main(Path("../data"), "flask_config.json")
     """
-    json_data = _load_json_config(data_dir / config_dir / config_file)
+    config_data = _load_json_config(data_dir / config_dir / config_file)
+    basemap_data = _load_map_config(data_dir / config_dir / basemap_file)
+    app = create_app(
+        data_dir,
+        config_data.get("flask_init", {}),
+        basemap_data.get("basemap_options", {}),
+        basemap_data.get("basemap_attributions", {}),
+        basemap_data.get("default_map_config", {}),
+    )
 
-    app = create_app(data_dir, json_data.get("flask_init", {}))
-
-    run_cfg = json_data.get("flask_run", {})
+    run_cfg = config_data.get("flask_run", {})
     print("Starting Folium Web Application...")
     print(f'Open your browser and navigate to: http://{run_cfg["host"]}:{run_cfg["port"]}')
-    print("Available basemaps:", list(BASEMAP_OPTIONS.keys()))
+    print("Available basemaps:", list(basemap_data.get("basemap_options", {}).keys()))
 
     base_args, extra_args = _split_run_args(run_cfg)
     app.run(**base_args, **extra_args)
@@ -349,7 +379,7 @@ def main(data_dir: Path, config_file: str, config_dir: str = "config") -> None:
 if __name__ == "__main__":
     # Import here to avoid circular imports
     input_dir = Path("../data/")
-    main(input_dir, "flask_config.json")
+    main(input_dir, "flask_config.json", "basemaps.json")
 
 
 # ==========================================================================================

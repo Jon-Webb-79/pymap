@@ -1,0 +1,20 @@
+{
+  "basemap_options": {
+    "Esri Satellite": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    "OpenStreetMap": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "OpenTopoMap": "https://tile.opentopomap.org/{z}/{x}/{y}.png"
+  },
+
+  "basemap_attributions": {
+    "Esri Satellite": "Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
+    "OpenStreetMap": "© <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors",
+    "OpenTopoMap": "Map data: © <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors, <a href='http://viewfinderpanorama.org'>SRTM</a> | Map style: © <a href='https://opentopomap.org'>OpenTopoMap</a> (<a href='https://creativecommons.org/licenses/by-sa/3.0/'>CC-BY-SA</a>)"
+  },
+
+  "default_map_config": {
+    "lat": 39.8283,
+    "lon": -98.5795,
+    "zoom": 4,
+    "basemap": "OpenStreetMap"
+  }
+}
