@@ -105,6 +105,7 @@ class MapService:
             name=basemap_name,
             overlay=False,
             control=True,
+            show=is_default,
         ).add_to(map_obj)
 
     # ------------------------------------------------------------------------------------------
@@ -305,7 +306,7 @@ class TemplateManager:
 
     # ------------------------------------------------------------------------------------------
 
-    def create_templates(self) -> str:
+    def create_templates(self) -> None:
         """
         Create required template and static files for the web application.
 
@@ -321,11 +322,12 @@ class TemplateManager:
 
         # Create index.html
         index_path = self.template_dir / "index.html"
-        with open(index_path, "w", encoding="utf-8") as f:
-            f.write(self._get_index_template())
+        if not index_path.exists():  # <-- don’t overwrite by default
+            with open(index_path, "w", encoding="utf-8") as f:
+                f.write(self._get_index_template())
 
         # Copy or ensure style.css exists
-        css_path = self.static_dir / "style.css"
+        css_path = self.static_dir / "css" / "style.css"
         if not css_path.exists():
             # If style.css doesn't exist, create a basic one
             with open(css_path, "w", encoding="utf-8") as f:
@@ -391,7 +393,7 @@ class TemplateManager:
 </head>
 <body>
     <div class="container">
-        <h1>Energy Infrastructure Map</h1>
+        <h1>Map Header Here</h1>
         <div class="map-container" id="map-container">
             {{ map_html|safe }}
         </div>
