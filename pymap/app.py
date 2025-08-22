@@ -2,8 +2,9 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask
-from map import TemplateManager, create_routes
-from read_files import load_json_config, load_map_config, split_run_args
+
+from pymap.map import TemplateManager, create_routes
+from pymap.read_files import load_json_config, load_map_config, split_run_args
 
 # ==========================================================================================
 # ==========================================================================================
@@ -181,16 +182,6 @@ def main(data_dir: Path, config_file: str, basemap_file: str, config_dir: str = 
 
     base_args, extra_args = split_run_args(run_cfg)
     app.run(**base_args, **extra_args)
-
-
-# ==========================================================================================
-# ==========================================================================================
-
-
-if __name__ == "__main__":
-    # Import here to avoid circular imports
-    input_dir = Path("../data/")
-    main(input_dir, "flask_config.json", "basemaps.json")
 
 
 # ==========================================================================================
