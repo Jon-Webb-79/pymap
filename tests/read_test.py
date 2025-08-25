@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from pymap.read_files import load_json_config
+from pymap.read_files import load_json_config, split_run_args
 
 # ==========================================================================================
 # ==========================================================================================
@@ -286,6 +286,166 @@ def test_unicode_handling_in_keys_and_values(tmp_path: Path):
     assert result["flask"]["nested"]["b"] == "naïve café"
     assert result["flask"]["nested"]["Δ"] == "delta"
     assert result["секция"]["ключ"] == "значение"
+
+
+# ==========================================================================================
+# ==========================================================================================
+# Test split_run_args
+
+
+def test_partitioning_known_vs_unknown_keys():
+    """Known keys go to base; all others to extra."""
+    run_cfg = {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "debug": True,
+        "load_dotenv": False,
+        "use_reloader": True,  # unknown → extra
+        "threaded": False,  # unknown → extra
+        "anything": "goes",  # unknown → extra
+    }
+
+    base, extra = split_run_args(run_cfg)
+
+    assert base == {
+        "host": "0.0.0.0",
+        "port": 8000,
+        "debug": True,
+        "load_dotenv": False,
+    }
+    assert extra == {
+        "use_reloader": True,
+        "threaded": False,
+        "anything": "goes",
+    }
+
+
+# ------------------------------------------------------------------------------------------
+
+
+def test_drop_none_values():
+    """Keys with value None appear in neither base nor extra."""
+    run_cfg = {
+        "host": None,
+        "port": None,
+        "debug": None,
+        "load_dotenv": None,
+        "use_reloader": None,
+        "threaded": None,
+    }
+
+    base, extra = split_run_args(run_cfg)
+
+    assert base == {}
+    assert extra == {}
+
+
+# ------------------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("port", 0),  # falsy int retained
+        ("debug", False),  # falsy bool retained
+        ("host", ""),  # empty string retained
+    ],
+    ids=["zero_port", "false_debug", "empty_host"],
+)
+def test_keep_falsy_but_valid_values(key, value):
+    """Falsy-but-valid values (0, False, '') are retained, not dropped."""
+    run_cfg = {
+        key: value,
+        "use_reloader": False,  # ensure extra path also keeps falsy
+    }
+
+    base, extra = split_run_args(run_cfg)
+
+    if key in {"host", "port", "debug", "load_dotenv"}:
+        assert key in base and base[key] == value
+    else:
+        assert key in extra and extra[key] == value
+
+    assert "use_reloader" in extra and extra["use_reloader"] is False
+
+
+# ------------------------------------------------------------------------------------------
+
+
+def test_empty_input_returns_empty_base_and_extra():
+    """Empty input dict → both base and extra are empty."""
+    base, extra = split_run_args({})
+
+    assert base == {}
+    assert extra == {}
+
+
+# ------------------------------------------------------------------------------------------
+
+
+def test_input_immutability():
+    """Input mapping is not mutated by split_run_args."""
+    run_cfg = {
+        "host": "127.0.0.1",
+        "port": 5000,
+        "debug": False,
+        "use_reloader": True,
+        "unknown": 123,
+    }
+    snapshot = copy.deepcopy(run_cfg)
+
+    _base, _extra = split_run_args(run_cfg)
+
+    assert run_cfg == snapshot
+
+
+# ------------------------------------------------------------------------------------------
+
+
+def test_base_whitelist_enforced():
+    """Base contains only {host, port, debug, load_dotenv}; others must be in extra."""
+    run_cfg = {
+        "host": "0.0.0.0",
+        "port": 8080,
+        "debug": True,
+        "load_dotenv": True,
+        "use_reloader": True,  # should NOT leak into base
+        "threaded": True,  # should NOT leak into base
+    }
+
+    base, extra = split_run_args(run_cfg)
+
+    # Strict base whitelist
+    assert set(base.keys()) <= {"host", "port", "debug", "load_dotenv"}
+    assert "use_reloader" not in base and "threaded" not in base
+
+    # Unknowns present in extra
+    assert extra.get("use_reloader") is True
+    assert extra.get("threaded") is True
+
+
+# ------------------------------------------------------------------------------------------
+
+
+def test_many_unknown_keys_route_to_extra():
+    """Multiple arbitrary unknown keys route to extra intact (types preserved)."""
+    run_cfg = {
+        "debug": True,
+        "alpha": [1, 2, 3],
+        "beta": {"x": 1},
+        "gamma": ("a", "b"),
+        "delta": 0.0,
+        "epsilon": None,  # should be dropped entirely
+    }
+
+    base, extra = split_run_args(run_cfg)
+
+    assert base == {"debug": True}
+    assert "epsilon" not in extra
+    assert extra["alpha"] == [1, 2, 3]
+    assert extra["beta"] == {"x": 1}
+    assert extra["gamma"] == ("a", "b")
+    assert extra["delta"] == 0.0
 
 
 # ==========================================================================================
