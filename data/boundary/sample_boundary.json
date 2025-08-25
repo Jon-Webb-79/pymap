@@ -1,0 +1,42 @@
+{
+  "type": "FeatureCollection",
+  "name": "SampleBoundary",
+  "pymap": {
+    "title": "Sample Boundary",
+    "visible_default": true,
+    "tooltip": {
+      "fields": ["name", "area_km2"],
+      "aliases": ["Name", "Area (km²)"]
+    },
+    "popup": {
+      "fields": ["description"]
+    },
+    "style": {
+      "color": "#ff0000",
+      "weight": 2,
+      "fill": true,
+      "fillOpacity": 0.3
+    }
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Test Polygon",
+        "area_km2": 12.34,
+        "description": "This is a test polygon for boundary overlay."
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [-100.0, 40.0],
+            [-99.5, 40.0],
+            [-99.75, 40.5],
+            [-100.0, 40.0]
+          ]
+        ]
+      }
+    }
+  ]
+}

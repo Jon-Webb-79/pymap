@@ -60,6 +60,7 @@ DEFAULTS: dict[str, Any] = {
 
 def create_app(
     data_dir: Path,
+    boundary_dir: Path,
     flask_config_data: dict[str, Any],
     basemap_options: dict[str, str],
     attributes: dict[str, str],
@@ -116,12 +117,7 @@ def create_app(
     template_manager.create_templates()
 
     # Register routes
-    create_routes(
-        app,
-        basemap_options,
-        attributes,
-        map_config,
-    )
+    create_routes(app, basemap_options, attributes, map_config, boundary_dir)
 
     return app
 
@@ -129,7 +125,9 @@ def create_app(
 # ------------------------------------------------------------------------------------------
 
 
-def main(data_dir: Path, config_file: str, basemap_file: str, config_dir: str = "config") -> None:
+def main(
+    data_dir: Path, config_file: str, basemap_file: str, config_dir: str = "config", boundary_dir="boundary"
+) -> None:
     """
     Entry point for running the Flask application.
 
@@ -169,6 +167,7 @@ def main(data_dir: Path, config_file: str, basemap_file: str, config_dir: str = 
     basemap_data = load_map_config(data_dir / config_dir / basemap_file)
     app = create_app(
         data_dir,
+        data_dir / boundary_dir,
         config_data.get("flask_init", {}),
         basemap_data.get("basemap_options", {}),
         basemap_data.get("basemap_attributions", {}),

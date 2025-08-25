@@ -4,6 +4,8 @@ from typing import Optional, Union
 import folium
 from flask import Flask, Response, jsonify, render_template, request
 
+from pymap.layers import BoundaryManager
+
 # ==========================================================================================
 # ==========================================================================================
 
@@ -35,7 +37,11 @@ class MapService:
     """Service class for creating and managing Folium maps with predefined basemaps."""
 
     def __init__(
-        self, basemap_options: dict[str, str], attributions: dict[str, str], default_config: dict[str, float]
+        self,
+        basemap_options: dict[str, str],
+        attributions: dict[str, str],
+        default_config: dict[str, float],
+        boundary_dir: Path,
     ) -> None:
         """
         Initialize the map service with predefined configuration.
@@ -49,6 +55,7 @@ class MapService:
         self.basemap_options = basemap_options
         self.attributions = attributions
         self.default_config = default_config
+        self.boundary_dir = boundary_dir
 
     # ------------------------------------------------------------------------------------------
 
@@ -180,6 +187,7 @@ class MapService:
         # Add basemap layers
         self.add_all_basemap_layers(map_obj, basemap)
 
+        BoundaryManager(self.boundary_dir).add_boundaries(map_obj)
         # Add layer control
         folium.LayerControl().add_to(map_obj)
 
@@ -206,7 +214,11 @@ class MapService:
 
 
 def create_routes(
-    app: Flask, map_options: dict[str, str], attributes: dict[str, str], map_config: dict[str, float]
+    app: Flask,
+    map_options: dict[str, str],
+    attributes: dict[str, str],
+    map_config: dict[str, float],
+    boundary_dir: Path,
 ) -> None:
     """
     Register application routes on the provided Flask app.
@@ -226,7 +238,7 @@ def create_routes(
     Returns:
         None. Routes are registered on the given app in place.
     """
-    map_service = MapService(map_options, attributes, map_config)
+    map_service = MapService(map_options, attributes, map_config, boundary_dir)
 
     @app.route("/")
     def index() -> Union[str, Response]:
