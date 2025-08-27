@@ -86,7 +86,7 @@ class BoundaryManager:
         """
         Discover boundary files and add them as overlay layers to a Folium map.
 
-        This method scans the boundary directory for supported files (.geojson, .json, .gpkg),
+        Scans the boundary directory for supported files (.geojson, .json, .gpkg),
         reads geometry and metadata, builds tooltips and popups, and adds each file as a
         FeatureGroup layer to the given map.
 
@@ -96,69 +96,73 @@ class BoundaryManager:
         Side Effects:
             - Prints debug information about files and metadata.
             - Adds FeatureGroups and GeoJson layers directly to the map.
+            - Logs warnings for any files that could not be processed.
         """
 
         print(f"[DEBUG] Searching {self.boundary_dir} for files")
         for path in self._iter_boundary_files():
-            stem = path.stem
+            try:
+                stem = path.stem
+                if path.suffix.lower() in (".geojson", ".json"):
+                    gj = self._read_geojson(path)
+                    embedded = self._extract_embedded_meta(gj)  # dict or None
+                    sidecar = self._load_sidecar_meta(stem)  # dict or None
+                    meta_raw = embedded if embedded is not None else sidecar
+                elif path.suffix.lower() == ".gpkg":
+                    gj = self._read_gpkg_as_geojson(path)
+                    meta_raw = self._load_sidecar_meta(stem)
+                else:
+                    # Skip unsupported extensions
+                    continue
 
-            if path.suffix.lower() in (".geojson", ".json"):
-                print("[DEBUG] In json file")
-                gj = self._read_geojson(path)
-                meta_raw = self._extract_embedded_meta(gj) or self._load_sidecar_meta(stem)
-                print("[DEBUG] Out of json file")
-            elif path.suffix.lower() == ".gpkg":
-                gj = self._read_gpkg_as_geojson(path)
-                meta_raw = self._load_sidecar_meta(stem)
-            else:
-                continue
-
-            meta = self._normalize_meta(meta_raw, fallback_title=stem)
-            print(
-                f"[DEBUG] Metadata for {path.name}: title={meta.title}, "
-                f"tooltip_fields={meta.tooltip_fields}, "
-                f"popup_fields={meta.popup_fields}"
-            )
-
-            group = folium.FeatureGroup(
-                name=meta.title, overlay=True, control=True, show=meta.visible_default
-            )
-
-            tooltip = None
-            if meta.tooltip_fields:
-                tooltip = GeoJsonTooltip(
-                    fields=meta.tooltip_fields,
-                    aliases=meta.tooltip_aliases or [],
-                    sticky=True,
+                meta = self._normalize_meta(meta_raw, fallback_title=stem)
+                print(
+                    f"[DEBUG] Metadata for {path.name}: title={meta.title}, "
+                    f"tooltip_fields={meta.tooltip_fields}, "
+                    f"popup_fields={meta.popup_fields}"
                 )
 
-            popup = None
-            if meta.popup_fields:
-                # simple key:value popup table; GeoJsonPopup handles JS side cleanly
-                popup = GeoJsonPopup(
-                    fields=meta.popup_fields,
-                    aliases=meta.popup_fields,  # or meta.tooltip_aliases if you want different labels
-                    labels=True,
-                    max_width=300,
-                    localize=True,
+                group = folium.FeatureGroup(
+                    name=meta.title, overlay=True, control=True, show=meta.visible_default
                 )
 
-            style_fn = self._build_style_function(meta.style)
+                tooltip = None
+                if meta.tooltip_fields:
+                    tooltip = GeoJsonTooltip(
+                        fields=meta.tooltip_fields,
+                        aliases=meta.tooltip_aliases or [],
+                        sticky=True,
+                    )
 
-            folium.GeoJson(
-                data=gj,
-                name=meta.title,
-                style_function=style_fn,
-                tooltip=tooltip,
-                popup=popup,
-                overlay=True,
-                control=True,
-                show=meta.visible_default,
-                highlight_function=lambda f: {"weight": 3},
-            ).add_to(group)
+                popup = None
+                if meta.popup_fields:
+                    popup = GeoJsonPopup(
+                        fields=meta.popup_fields,
+                        aliases=meta.popup_fields,  # or meta.tooltip_aliases if different labels desired
+                        labels=True,
+                        max_width=300,
+                        localize=True,
+                    )
 
-            print("Made it to this point!")
-            group.add_to(m)
+                style_fn = self._build_style_function(meta.style)
+
+                folium.GeoJson(
+                    data=gj,
+                    name=meta.title,
+                    style_function=style_fn,
+                    tooltip=tooltip,
+                    popup=popup,
+                    overlay=True,
+                    control=True,
+                    show=meta.visible_default,
+                    highlight_function=lambda f: {"weight": 3},
+                ).add_to(group)
+
+                group.add_to(m)
+
+            except Exception as e:
+                # Log and skip problematic file
+                print(f"[WARN] Skipping {path.name} due to error: {e}")
 
     # ==========================================================================================
 
@@ -238,7 +242,15 @@ class BoundaryManager:
             print(f"[DEBUG] Boundary directory does not exist: {self.boundary_dir}")
             return []
         exts = (".geojson", ".json", ".gpkg")
-        files = sorted([p for p in self.boundary_dir.iterdir() if p.suffix.lower() in exts])
+        files = []
+        for p in self.boundary_dir.iterdir():
+            if p.suffix.lower() not in exts:
+                continue
+            # skip sidecar metadata files like "<stem>.meta.json"
+            if p.name.endswith(".meta.json"):
+                continue
+            files.append(p)
+        files = sorted(files)
         print(f"[DEBUG] Found {len(files)} boundary files: {[f.name for f in files]}")
         return files
 
