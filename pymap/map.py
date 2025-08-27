@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Optional, Union
 
@@ -187,7 +188,7 @@ class MapService:
         # Add basemap layers
         self.add_all_basemap_layers(map_obj, basemap)
 
-        BoundaryManager(self.boundary_dir).add_boundaries(map_obj)
+        BoundaryManager(self.boundary_dir, logger=logging.getLogger("pymap.boundary")).add_boundaries(map_obj)
         # Add layer control
         folium.LayerControl().add_to(map_obj)
 

@@ -1,4 +1,5 @@
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -71,14 +72,16 @@ class BoundaryManager:
       3) Defaults (title=file stem, visible_default=True)
     """
 
-    def __init__(self, boundary_dir: Path) -> None:
+    def __init__(self, boundary_dir: Path, logger=None) -> None:
         """
         Initialize a BoundaryManager for handling overlay boundary files.
 
         Args:
             boundary_dir: Path to the directory where boundary files (GeoJSON/JSON/GPKG) are stored.
+            logger: a log file object
         """
         self.boundary_dir = boundary_dir
+        self.logger = logger or logging.getLogger("pymap.boundary")
 
     # ------------------------------------------------------------------------------------------
 
@@ -99,7 +102,7 @@ class BoundaryManager:
             - Logs warnings for any files that could not be processed.
         """
 
-        print(f"[DEBUG] Searching {self.boundary_dir} for files")
+        self.logger.debug(f"Searching {self.boundary_dir} for files")
         for path in self._iter_boundary_files():
             try:
                 stem = path.stem
@@ -116,10 +119,12 @@ class BoundaryManager:
                     continue
 
                 meta = self._normalize_meta(meta_raw, fallback_title=stem)
-                print(
-                    f"[DEBUG] Metadata for {path.name}: title={meta.title}, "
-                    f"tooltip_fields={meta.tooltip_fields}, "
-                    f"popup_fields={meta.popup_fields}"
+                self.logger.debug(
+                    "Metadata for %s: title=%s, tooltip_fields=%s, popup_fields=%s",
+                    path.name,
+                    meta.title,
+                    meta.tooltip_fields,
+                    meta.popup_fields,
                 )
 
                 group = folium.FeatureGroup(
@@ -162,7 +167,7 @@ class BoundaryManager:
 
             except Exception as e:
                 # Log and skip problematic file
-                print(f"[WARN] Skipping {path.name} due to error: {e}")
+                self.logger.warning(f"Skipping {path.name} due to error: {e}")
 
     # ==========================================================================================
 
@@ -239,7 +244,7 @@ class BoundaryManager:
             A sorted list of Paths for supported files. Empty if directory does not exist.
         """
         if not self.boundary_dir.exists():
-            print(f"[DEBUG] Boundary directory does not exist: {self.boundary_dir}")
+            self.logger.debug(f"Boundary directory does not exist: {self.boundary_dir}")
             return []
         exts = (".geojson", ".json", ".gpkg")
         files = []
@@ -251,7 +256,7 @@ class BoundaryManager:
                 continue
             files.append(p)
         files = sorted(files)
-        print(f"[DEBUG] Found {len(files)} boundary files: {[f.name for f in files]}")
+        self.logger.debug(f"Found {len(files)} boundary files: {[f.name for f in files]}")
         return files
 
     # ------------------------------------------------------------------------------------------

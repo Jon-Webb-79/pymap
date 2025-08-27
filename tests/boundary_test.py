@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 import folium
@@ -116,66 +117,82 @@ def _group_show(group: folium.map.FeatureGroup):
 # ==========================================================================================
 
 
-def test_directory_missing_adds_no_layers_and_prints(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """boundary_dir does not exist → no layers added; debug lines printed; no exceptions."""
+def test_directory_missing_adds_no_layers_and_logs(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+    """boundary_dir does not exist → no layers added; debug lines logged; no exceptions."""
     missing_dir = tmp_path / "boundary"  # do not create it
     m = folium.Map(location=[0, 0], zoom_start=2)
 
-    mgr = BoundaryManager(missing_dir)
-    mgr.add_boundaries(m)
+    # Capture DEBUG logs from just the boundary logger (regardless of global config)
+    with caplog.at_level(logging.DEBUG, logger="pymap.boundary"):
+        BoundaryManager(missing_dir).add_boundaries(m)
 
-    out = capsys.readouterr().out
-    assert f"[DEBUG] Searching {missing_dir}" in out
-    assert "Boundary directory does not exist" in out
-
+    # Assert no feature groups were added
     groups = _feature_groups_on(m)
     assert groups == []
+
+    # Assert logs were emitted
+    # Option 1: assert via structured records
+    msgs = [rec.getMessage() for rec in caplog.records if rec.name == "pymap.boundary"]
+    assert any("Searching" in msg and str(missing_dir) in msg for msg in msgs)
+    assert any("Boundary directory does not exist" in msg for msg in msgs)
 
 
 # ------------------------------------------------------------------------------------------
 
 
-def test_directory_exists_but_empty_adds_no_layers_and_prints(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Empty directory → no layers; debug prints include 'Found 0 boundary files'."""
+def test_directory_exists_but_empty_adds_no_layers_and_logs(tmp_path: Path, caplog: pytest.LogCaptureFixture):
+    """Empty directory → no layers; debug logs include 'Found 0 boundary files'."""
     boundary_dir = tmp_path / "boundary"
     boundary_dir.mkdir(parents=True, exist_ok=True)
     m = folium.Map(location=[0, 0], zoom_start=2)
 
-    mgr = BoundaryManager(boundary_dir)
-    mgr.add_boundaries(m)
+    # Capture DEBUG for just the boundary logger so the test is independent of global config
+    with caplog.at_level(logging.DEBUG, logger="pymap.boundary"):
+        BoundaryManager(boundary_dir).add_boundaries(m)
 
-    out = capsys.readouterr().out
-    assert f"[DEBUG] Searching {boundary_dir}" in out
-    assert "[DEBUG] Found 0 boundary files" in out
-
+    # No layers added
     groups = _feature_groups_on(m)
     assert groups == []
+
+    # Assert on emitted log messages
+    # Prefer structured assertions over raw text search
+    msgs = [rec.getMessage() for rec in caplog.records if rec.name == "pymap.boundary"]
+    assert any("Searching" in msg and str(boundary_dir) in msg for msg in msgs)
+    assert any("Found 0 boundary files" in msg for msg in msgs)
 
 
 # ------------------------------------------------------------------------------------------
 
 
-def test_unsupported_extensions_only_ignored(tmp_path: Path, capsys: pytest.CaptureFixture):
+def test_unsupported_extensions_only_ignored(tmp_path: Path, caplog: pytest.LogCaptureFixture):
     """Only unsupported files present (e.g., .txt) → zero layers, no errors."""
     boundary_dir = tmp_path / "boundary"
     boundary_dir.mkdir(parents=True, exist_ok=True)
     (boundary_dir / "notes.txt").write_text("hello", encoding="utf-8")
 
     m = folium.Map(location=[0, 0], zoom_start=2)
-    BoundaryManager(boundary_dir).add_boundaries(m)
 
-    out = capsys.readouterr().out
-    assert "[DEBUG] Found 0 boundary files" in out
+    # Capture DEBUG for just the boundary logger (independent of global config)
+    with caplog.at_level(logging.DEBUG, logger="pymap.boundary"):
+        BoundaryManager(boundary_dir).add_boundaries(m)
 
+    # No layers added
     groups = _feature_groups_on(m)
     assert groups == []
+
+    # Assert debug message about finding zero boundary files
+    msgs = [rec.getMessage() for rec in caplog.records if rec.name == "pymap.boundary"]
+    assert any("Found 0 boundary files" in msg for msg in msgs)
+
+    # Optional: ensure no warnings or errors were logged
+    assert not any(rec.levelno >= logging.WARNING for rec in caplog.records)
 
 
 # ------------------------------------------------------------------------------------------
 
 
 def test_unsupported_extensions_are_ignored_when_mixed_with_valid(
-    tmp_path: Path, capsys: pytest.CaptureFixture
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
 ):
     """Unsupported files are ignored; supported ones are processed."""
     boundary_dir = tmp_path / "boundary"
@@ -184,14 +201,23 @@ def test_unsupported_extensions_are_ignored_when_mixed_with_valid(
     _write_geojson(boundary_dir / "a_layer.geojson", name="A")
 
     m = folium.Map(location=[0, 0], zoom_start=2)
-    BoundaryManager(boundary_dir).add_boundaries(m)
 
-    out = capsys.readouterr().out
-    # Should report exactly 1 supported file
-    assert "[DEBUG] Found 1 boundary files: ['a_layer.geojson']" in out
+    # Capture DEBUG logs for this module/logger regardless of global config
+    with caplog.at_level(logging.DEBUG, logger="pymap.boundary"):
+        BoundaryManager(boundary_dir).add_boundaries(m)
 
+    # Assert one supported file was detected in logs
+    msgs = [rec.getMessage() for rec in caplog.records if rec.name == "pymap.boundary"]
+    assert any("Found 1 boundary files" in msg for msg in msgs)
+    assert any("a_layer.geojson" in msg for msg in msgs)
+
+    # No warnings or errors expected
+    assert not any(rec.levelno >= logging.WARNING for rec in caplog.records)
+
+    # Assert exactly one FeatureGroup was added
     groups = _feature_groups_on(m)
     assert len(groups) == 1
+
     # FeatureGroup.layer_name should reflect the title (defaults to stem)
     assert getattr(groups[0], "layer_name", None) in {"a_layer", "A", "a_layer.geojson"}
 
@@ -275,26 +301,34 @@ def test_gpkg_adds_one_layer_when_geopandas_available(tmp_path: Path):
 # ------------------------------------------------------------------------------------------
 
 
-def test_gpkg_raises_runtimeerror_when_geopandas_unavailable(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Simulate gpd is None → .gpkg triggers RuntimeError; other files still processed separately."""
+def test_gpkg_skipped_when_geopandas_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+):
+    """When gpd is None, .gpkg is skipped with a warning; no exception."""
     boundary_dir = tmp_path / "boundary"
     boundary_dir.mkdir(parents=True, exist_ok=True)
-
-    # Create a dummy .gpkg file placeholder (content won't be read once RuntimeError triggers)
     (boundary_dir / "fake.gpkg").write_bytes(b"not-a-real-gpkg")
 
-    # Also add a valid .geojson to show that in a *separate* run it would process fine
-    _write_geojson(boundary_dir / "ok.geojson", name="OK")
+    # Patch where gpd is referenced
+    import pymap.layers as layers_mod
 
-    # Monkeypatch the module's geopandas alias to None to force the error path
-    import pymap.map as boundary_mod  # adjust if your module name differs
-
-    monkeypatch.setattr(boundary_mod, "gpd", None, raising=False)
+    monkeypatch.setattr(layers_mod, "gpd", None, raising=False)
 
     m = folium.Map(location=[0, 0], zoom_start=2)
 
-    with pytest.raises(RuntimeError):
+    with caplog.at_level(logging.WARNING, logger="pymap.boundary"):
+        from pymap.layers import BoundaryManager
+
         BoundaryManager(boundary_dir).add_boundaries(m)
+
+    # No layers added
+    assert _feature_groups_on(m) == []
+
+    # Warning logged about missing GeoPandas / skipping gpkg
+    msgs = [r.getMessage() for r in caplog.records if r.name == "pymap.boundary"]
+    assert any(
+        "geopandas" in msg.lower() and ("gpkg" in msg.lower() or "geopackage" in msg.lower()) for msg in msgs
+    )
 
 
 # ==========================================================================================

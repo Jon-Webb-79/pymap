@@ -30,5 +30,86 @@
     "ssl_context": null,
     "certfile": null,
     "keyfile": null
+  },
+  "logging": {
+    "version": 1,
+    "disable_existing_loggers": false,
+
+    "formatters": {
+      "standard": {
+        "format": "%(asctime)s %(levelname)s %(name)s [req=%(request_id)s user=%(user_id)s ip=%(remote_addr)s] %(message)s"
+      },
+      "access": {
+        "format": "%(asctime)s INFO pymap.access [req=%(request_id)s ip=%(remote_addr)s] %(message)s"
+      }
+    },
+
+    "filters": {
+      "request_context": {
+        "()": "pymap.logging_ext.RequestContextFilter"
+      }
+    },
+
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "level": "DEBUG",
+            "formatter": "standard",
+            "filters": ["request_context"]
+        },
+        "app_file": {
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "level": "DEBUG",
+            "formatter": "standard",
+            "filters": ["request_context"],
+            "filename": "logs/app.log",
+            "when": "midnight",
+            "backupCount": 14,
+            "encoding": "utf-8" },
+        "console_access": {
+            "class": "logging.StreamHandler",
+            "level": "INFO",
+            "formatter": "access",
+            "filters": ["request_context"]
+        },
+        "access_file": {
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "level": "INFO",
+            "formatter": "access",
+            "filters": ["request_context"],
+            "filename": "logs/access.log",
+            "when": "midnight",
+            "backupCount": 14,
+            "encoding": "utf-8"
+        }
+    },
+
+    "loggers": {
+      "pymap": {
+        "level": "DEBUG",
+        "handlers": ["console", "app_file"],
+        "propagate": false
+      },
+      "pymap.access": {
+        "level": "INFO",
+        "handlers": ["console_access", "access_file"],
+        "propagate": false
+      },
+      "pymap.boundary": {
+          "level": "DEBUG",
+          "handlers": ["console", "app_file"],
+          "propagate": false
+      },
+      "werkzeug": {
+        "level": "WARNING",
+        "handlers": ["console"],
+        "propagate": false
+      }
+    },
+
+    "root": {
+      "level": "WARNING",
+      "handlers": ["console"]
+    }
   }
 }

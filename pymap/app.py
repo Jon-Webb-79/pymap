@@ -1,7 +1,14 @@
+from __future__ import annotations
+
+import logging
+import logging.config
+import os
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
-from flask import Flask
+from flask import Flask, g, request
 
 from pymap.map import TemplateManager, create_routes
 from pymap.read_files import load_json_config, load_map_config, split_run_args
@@ -65,59 +72,76 @@ def create_app(
     basemap_options: dict[str, str],
     attributes: dict[str, str],
     map_config: dict[str, float],
+    logging_cfg: dict[str, Any] | None = None,  # <-- NEW (optional)
 ) -> Flask:
     """
     Application factory that builds and configures a Flask app instance.
-
-    This function prepares a Flask application with:
-      - Template and static folder paths resolved relative to ``data_dir``.
-      - A :class:`TemplateManager` initialized and instructed to create any
-        required template scaffolding.
-      - Application routes registered via :func:`create_routes`.
-
-    Args:
-        data_dir: Base data directory for the application. Template and static
-            directories are resolved relative to this path.
-        flask_config_data: A mapping of keyword arguments to pass to the
-            :class:`flask.Flask` constructor (typically the ``"flask_init"``
-            section of the JSON config). Must contain ``"template_folder"`` and
-            ``"static_folder"`` keys with relative paths.
-
-    Returns:
-        A fully constructed :class:`flask.Flask` application instance ready
-        to be run or further configured.
-
-    Side Effects:
-        - Prints debug messages with the resolved template and static folder paths.
-        - Creates template files via :class:`TemplateManager`.
-        - Registers routes globally.
-
-    Raises:
-        KeyError: If required keys (e.g., ``"template_folder"`` or
-            ``"static_folder"``) are missing in ``flask_config_data``.
-
-    Examples:
-        >>> app = create_app(Path("../data"), {"import_name": "__main__",
-        ...     "template_folder": "templates", "static_folder": "assets"})
-        >>> isinstance(app, Flask)
-        True
     """
+
+    # 0) Configure logging first (optional, if not done in main.py)
+    if logging_cfg:
+        # Create logs/ directory if using file handlers (best-effort)
+        for handler in logging_cfg.get("handlers", {}).values():
+            filename = handler.get("filename")
+            if filename:
+                os.makedirs(Path(filename).parent, exist_ok=True)
+        logging.config.dictConfig(logging_cfg)
+
+    logger = logging.getLogger("pymap.app")
+
+    # 1) Resolve template/static paths relative to data_dir
+    flask_config_data = dict(flask_config_data)  # avoid mutating caller’s dict
     flask_config_data["template_folder"] = data_dir / flask_config_data["template_folder"]
     flask_config_data["static_folder"] = data_dir / flask_config_data["static_folder"]
 
-    print(f"DEBUG: Flask template_folder: {flask_config_data['template_folder'].resolve()}")
-    print(f"DEBUG: Flask static_folder: {flask_config_data['static_folder'].resolve()}")
+    logger.debug("Flask template_folder: %s", Path(flask_config_data["template_folder"]).resolve())
+    logger.debug("Flask static_folder: %s", Path(flask_config_data["static_folder"]).resolve())
 
+    # 2) Build app
     app = Flask(**flask_config_data)
 
-    # Create templates
-    template_manager = TemplateManager(
-        data_dir, flask_config_data["template_folder"], flask_config_data["static_folder"]
-    )
-    template_manager.create_templates()
+    # If running behind a trusted proxy that sets X-Forwarded-* headers, enable this:
+    # app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1)
 
-    # Register routes
+    # 3) Per-request correlation + timing
+    @app.before_request
+    def _start_request_context():
+        g.request_id = uuid.uuid4().hex[:12]
+        g.start_ts = time.perf_counter()
+        # If you add auth later, also set:
+        # g.user_id = current_user.id if current_user.is_authenticated else "-"
+
+    @app.after_request
+    def _access_log(response):
+        try:
+            dur_ms = int((time.perf_counter() - getattr(g, "start_ts", 0)) * 1000)
+            logging.getLogger("pymap.access").info(
+                "%s %s %s %s %dms",
+                request.method,
+                request.path,
+                response.status_code,
+                request.user_agent.string,
+                dur_ms,
+            )
+        except Exception:
+            logging.getLogger("pymap").exception("failed to write access log")
+        return response
+
+    # 4) Create templates (with error handling)
+    try:
+        template_manager = TemplateManager(
+            data_dir,
+            flask_config_data["template_folder"],
+            flask_config_data["static_folder"],
+        )
+        template_manager.create_templates()
+        logger.info("Templates ensured at %s", flask_config_data["template_folder"])
+    except Exception:
+        logger.exception("Template creation failed")
+
+    # 5) Register routes
     create_routes(app, basemap_options, attributes, map_config, boundary_dir)
+    logger.info("Routes registered; app ready")
 
     return app
 
@@ -172,6 +196,7 @@ def main(
         basemap_data.get("basemap_options", {}),
         basemap_data.get("basemap_attributions", {}),
         basemap_data.get("default_map_config", {}),
+        config_data.get("logging", {}),
     )
 
     run_cfg = config_data.get("flask_run", {})
