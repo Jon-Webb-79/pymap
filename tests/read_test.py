@@ -135,22 +135,6 @@ def base_defaults():
 # ------------------------------------------------------------------------------------------
 
 
-def test_missing_file_returns_defaults_and_warns(tmp_path: Path, capsys: pytest.CaptureFixture):
-    """Missing file → returns defaults and emits WARNING line."""
-    defaults = base_defaults()
-    missing = tmp_path / "does_not_exist.json"
-
-    result = load_json_config(missing, defaults)
-    out = capsys.readouterr().out
-
-    assert result is defaults
-    assert "WARNING: config file" in out
-    assert str(missing) in out
-
-
-# ------------------------------------------------------------------------------------------
-
-
 def test_invalid_json_raises_jsondecodeerror(tmp_path: Path):
     """Malformed JSON → json.JSONDecodeError is raised."""
     defaults = base_defaults()

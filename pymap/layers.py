@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Optional
@@ -102,8 +103,11 @@ class BoundaryManager:
             - Logs warnings for any files that could not be processed.
         """
 
-        self.logger.debug(f"Searching {self.boundary_dir} for files")
-        for path in self._iter_boundary_files():
+        t0 = time.perf_counter()
+        self.logger.info(f"Searching {self.boundary_dir} for files")
+        files = list(self._iter_boundary_files())
+        self.logger.info("Found %d supported boundary files", len(files))
+        for path in files:
             try:
                 stem = path.stem
                 if path.suffix.lower() in (".geojson", ".json"):
@@ -164,7 +168,9 @@ class BoundaryManager:
                 ).add_to(group)
 
                 group.add_to(m)
-
+                self.logger.debug(
+                    "Rendered layer %s in %d ms", meta.title, int((time.perf_counter() - t0) * 1000)
+                )
             except Exception as e:
                 # Log and skip problematic file
                 self.logger.warning(f"Skipping {path.name} due to error: {e}")

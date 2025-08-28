@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 from typing import Any, Optional
 
@@ -94,7 +95,8 @@ def load_json_config(config_path: Optional[Path], defaults: dict[str, Any]) -> d
     if not config_path:
         return defaults
     if not config_path.exists():
-        print(f"WARNING: config file {config_path} not found. Using defaults.")
+        logger = logging.getLogger("pymap.config")
+        logger.warning("Config file %s not found. Using defaults.", config_path)
         return defaults
     with config_path.open("r", encoding="utf-8") as f:
         user_cfg = json.load(f)
@@ -190,6 +192,8 @@ def load_map_config(config_path: Path) -> dict:
     # 1. Each basemap must have an attribution
     missing_attributions = [b for b in basemap_options if b not in basemap_attributions]
     if missing_attributions:
+        logger = logging.getLogger("pymap.config")
+        logger.error("Missing attributions for basemaps: %s", missing_attributions)
         raise MapConfigError(f"Missing attributions for basemaps: {missing_attributions}")
 
     # 2. Default basemap must exist in basemap_options
